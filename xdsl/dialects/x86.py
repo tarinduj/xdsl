@@ -40,6 +40,7 @@ from xdsl.printer import Printer
 from xdsl.utils.exceptions import VerifyException
 from xdsl.utils.hints import isa
 
+ASM_SYNTAX = "att" # "att" or "intel"
 
 class X86RegisterType(Data[str], TypeAttribute, ABC):
     """
@@ -105,6 +106,12 @@ class GeneralRegisterType(X86RegisterType):
     """
 
     name = "x86.reg"
+    base: GeneralRegisterType | None = None
+    
+    def __init__(self, data, base: GeneralRegisterType | None = None):
+        super().__init__(data)  # Initialize the superclass first
+        # TODO: This is hacky. Fix it.
+        object.__setattr__(self, 'base', base) 
 
     @classmethod
     def instruction_set_name(cls) -> str:
@@ -115,42 +122,70 @@ class GeneralRegisterType(X86RegisterType):
         return GeneralRegisterType.X86_INDEX_BY_NAME
 
     X86_INDEX_BY_NAME = {
-        "rax": 0,
-        "rcx": 1,
-        "rdx": 2,
-        "rbx": 3,
-        "rsp": 4,
-        "rbp": 5,
-        "rsi": 6,
-        "rdi": 7,
-        "r8": 8,
-        "r9": 9,
-        "r10": 10,
-        "r11": 11,
-        "r12": 12,
-        "r13": 13,
-        "r14": 14,
-        "r15": 15,
+        "rax": 0, "eax": 0, "ax": 0, "al": 0, "ah": 0,
+        "rcx": 1, "ecx": 1, "cx": 1, "cl": 1, "ch": 1,
+        "rdx": 2, "edx": 2, "dx": 2, "dl": 2, "dh": 2,
+        "rbx": 3, "ebx": 3, "bx": 3, "bl": 3, "bh": 3,
+        "rsp": 4, "esp": 4, "sp": 4, "spl": 4,
+        "rbp": 5, "ebp": 5, "bp": 5, "bpl": 5,
+        "rsi": 6, "esi": 6, "si": 6, "sil": 6,
+        "rdi": 7, "edi": 7, "di": 7, "dil": 7,
+        "r8": 8, "r8d": 8, "r8w": 8, "r8b": 8,
+        "r9": 9, "r9d": 9, "r9w": 9, "r9b": 9,
+        "r10": 10, "r10d": 10, "r10w": 10, "r10b": 10,
+        "r11": 11, "r11d": 11, "r11w": 11, "r11b": 11,
+        "r12": 12, "r12d": 12, "r12w": 12, "r12b": 12,
+        "r13": 13, "r13d": 13, "r13w": 13, "r13b": 13,
+        "r14": 14, "r14d": 14, "r14w": 14, "r14b": 14,
+        "r15": 15, "r15d": 15, "r15w": 15, "r15b": 15,
     }
-
-
+    
 @irdl_attr_definition
-class AVXRegisterType(X86RegisterType):
+class MaskRegisterType(X86RegisterType):
     """
     An x86 register type for AVX512 instructions.
     """
 
-    name = "x86.avxreg"
+    name = "x86.maskreg"
 
     @classmethod
     def instruction_set_name(cls) -> str:
-        return "x86AVX"
+        return "x86SIMD"
 
     @classmethod
     def abi_index_by_name(cls) -> dict[str, int]:
-        return AVXRegisterType.X86AVX_INDEX_BY_NAME
+        return MaskRegisterType.X86MASK_INDEX_BY_NAME
 
-    X86AVX_INDEX_BY_NAME = {
+    X86MASK_INDEX_BY_NAME = {
+        "k0": 0,
+        "k1": 1,
+        "k2": 2,
+        "k3": 3,
+        "k4": 4,
+        "k5": 5,
+        "k6": 6,
+        "k7": 7,
+    }
+
+
+@irdl_attr_definition
+class SIMDRegisterType(X86RegisterType):
+    """
+    An x86 register type for AVX512 instructions.
+    """
+
+    name = "x86.simdreg"
+    
+
+    @classmethod
+    def instruction_set_name(cls) -> str:
+        return "x86SIMD"
+
+    @classmethod
+    def abi_index_by_name(cls) -> dict[str, int]:
+        return SIMDRegisterType.X86SIMD_INDEX_BY_NAME
+
+    X86SIMD_INDEX_BY_NAME = {
         "zmm0": 0,
         "zmm1": 1,
         "zmm2": 2,
@@ -198,55 +233,140 @@ R3InvT = TypeVar("R3InvT", bound=X86RegisterType)
 class Registers(ABC):
     """Namespace for named register constants."""
 
+    # RAX Register and its subregisters
     RAX = GeneralRegisterType("rax")
-    RCX = GeneralRegisterType("rcx")
-    RDX = GeneralRegisterType("rdx")
-    RBX = GeneralRegisterType("rbx")
-    RSP = GeneralRegisterType("rsp")
-    RBP = GeneralRegisterType("rbp")
-    RSI = GeneralRegisterType("rsi")
-    RDI = GeneralRegisterType("rdi")
-    R8 = GeneralRegisterType("r8")
-    R9 = GeneralRegisterType("r9")
-    R10 = GeneralRegisterType("r10")
-    R11 = GeneralRegisterType("r11")
-    R12 = GeneralRegisterType("r12")
-    R13 = GeneralRegisterType("r13")
-    R14 = GeneralRegisterType("r14")
-    R15 = GeneralRegisterType("r15")
+    EAX = GeneralRegisterType("eax", base=RAX)
+    AX = GeneralRegisterType("ax", base=EAX)
+    AL = GeneralRegisterType("al", base=AX)
+    AH = GeneralRegisterType("ah", base=AX)
 
-    ZMM0 = AVXRegisterType("zmm0")
-    ZMM1 = AVXRegisterType("zmm1")
-    ZMM2 = AVXRegisterType("zmm2")
-    ZMM3 = AVXRegisterType("zmm3")
-    ZMM4 = AVXRegisterType("zmm4")
-    ZMM5 = AVXRegisterType("zmm5")
-    ZMM6 = AVXRegisterType("zmm6")
-    ZMM7 = AVXRegisterType("zmm7")
-    ZMM8 = AVXRegisterType("zmm8")
-    ZMM9 = AVXRegisterType("zmm9")
-    ZMM10 = AVXRegisterType("zmm10")
-    ZMM11 = AVXRegisterType("zmm11")
-    ZMM12 = AVXRegisterType("zmm12")
-    ZMM13 = AVXRegisterType("zmm13")
-    ZMM14 = AVXRegisterType("zmm14")
-    ZMM15 = AVXRegisterType("zmm15")
-    ZMM16 = AVXRegisterType("zmm16")
-    ZMM17 = AVXRegisterType("zmm17")
-    ZMM18 = AVXRegisterType("zmm18")
-    ZMM19 = AVXRegisterType("zmm19")
-    ZMM20 = AVXRegisterType("zmm20")
-    ZMM21 = AVXRegisterType("zmm21")
-    ZMM22 = AVXRegisterType("zmm22")
-    ZMM23 = AVXRegisterType("zmm23")
-    ZMM24 = AVXRegisterType("zmm24")
-    ZMM25 = AVXRegisterType("zmm25")
-    ZMM26 = AVXRegisterType("zmm26")
-    ZMM27 = AVXRegisterType("zmm27")
-    ZMM28 = AVXRegisterType("zmm28")
-    ZMM29 = AVXRegisterType("zmm29")
-    ZMM30 = AVXRegisterType("zmm30")
-    ZMM31 = AVXRegisterType("zmm31")
+    # RCX Register and its subregisters
+    RCX = GeneralRegisterType("rcx")
+    ECX = GeneralRegisterType("ecx", base=RCX)
+    CX = GeneralRegisterType("cx", base=ECX)
+    CL = GeneralRegisterType("cl", base=CX)
+    CH = GeneralRegisterType("ch", base=CX)
+
+    # RDX Register and its subregisters
+    RDX = GeneralRegisterType("rdx")
+    EDX = GeneralRegisterType("edx", base=RDX)
+    DX = GeneralRegisterType("dx", base=EDX)
+    DL = GeneralRegisterType("dl", base=DX)
+    DH = GeneralRegisterType("dh", base=DX)
+
+    # RBX Register and its subregisters
+    RBX = GeneralRegisterType("rbx")
+    EBX = GeneralRegisterType("ebx", base=RBX)
+    BX = GeneralRegisterType("bx", base=EBX)
+    BL = GeneralRegisterType("bl", base=BX)
+    BH = GeneralRegisterType("bh", base=BX)
+
+    # RSP Register and its subregisters
+    RSP = GeneralRegisterType("rsp")
+    ESP = GeneralRegisterType("esp", base=RSP)
+    SP = GeneralRegisterType("sp", base=ESP)
+    SPL = GeneralRegisterType("spl", base=SP)
+
+    # RBP Register and its subregisters
+    RBP = GeneralRegisterType("rbp")
+    EBP = GeneralRegisterType("ebp", base=RBP)
+    BP = GeneralRegisterType("bp", base=EBP)
+    BPL = GeneralRegisterType("bpl", base=BP)
+
+    # RSI Register and its subregisters
+    RSI = GeneralRegisterType("rsi")
+    ESI = GeneralRegisterType("esi", base=RSI)
+    SI = GeneralRegisterType("si", base=ESI)
+    SIL = GeneralRegisterType("sil", base=SI)
+
+    # RDI Register and its subregisters
+    RDI = GeneralRegisterType("rdi")
+    EDI = GeneralRegisterType("edi", base=RDI)
+    DI = GeneralRegisterType("di", base=EDI)
+    DIL = GeneralRegisterType("dil", base=DI)
+
+    # R8 to R15 Registers and their subregisters
+    R8 = GeneralRegisterType("r8")
+    R8D = GeneralRegisterType("r8d", base=R8)
+    R8W = GeneralRegisterType("r8w", base=R8D)
+    R8B = GeneralRegisterType("r8b", base=R8W)
+
+    R9 = GeneralRegisterType("r9")
+    R9D = GeneralRegisterType("r9d", base=R9)
+    R9W = GeneralRegisterType("r9w", base=R9D)
+    R9B = GeneralRegisterType("r9b", base=R9W)
+
+    R10 = GeneralRegisterType("r10")
+    R10D = GeneralRegisterType("r10d", base=R10)
+    R10W = GeneralRegisterType("r10w", base=R10D)
+    R10B = GeneralRegisterType("r10b", base=R10W)
+
+    R11 = GeneralRegisterType("r11")
+    R11D = GeneralRegisterType("r11d", base=R11)
+    R11W = GeneralRegisterType("r11w", base=R11D)
+    R11B = GeneralRegisterType("r11b", base=R11W)
+
+    R12 = GeneralRegisterType("r12")
+    R12D = GeneralRegisterType("r12d", base=R12)
+    R12W = GeneralRegisterType("r12w", base=R12D)
+    R12B = GeneralRegisterType("r12b", base=R12W)
+
+    R13 = GeneralRegisterType("r13")
+    R13D = GeneralRegisterType("r13d", base=R13)
+    R13W = GeneralRegisterType("r13w", base=R13D)
+    R13B = GeneralRegisterType("r13b", base=R13W)
+    
+    R14 = GeneralRegisterType("r14")
+    R14D = GeneralRegisterType("r14d", base=R14)
+    R14W = GeneralRegisterType("r14w", base=R14D)
+    R14B = GeneralRegisterType("r14b", base=R14W)
+    
+    R15 = GeneralRegisterType("r15")
+    R15D = GeneralRegisterType("r15d", base=R15)
+    R15W = GeneralRegisterType("r15w", base=R15D)
+    R15B = GeneralRegisterType("r15b", base=R15W)
+
+    ZMM0 = SIMDRegisterType("zmm0")
+    ZMM1 = SIMDRegisterType("zmm1")
+    ZMM2 = SIMDRegisterType("zmm2")
+    ZMM3 = SIMDRegisterType("zmm3")
+    ZMM4 = SIMDRegisterType("zmm4")
+    ZMM5 = SIMDRegisterType("zmm5")
+    ZMM6 = SIMDRegisterType("zmm6")
+    ZMM7 = SIMDRegisterType("zmm7")
+    ZMM8 = SIMDRegisterType("zmm8")
+    ZMM9 = SIMDRegisterType("zmm9")
+    ZMM10 = SIMDRegisterType("zmm10")
+    ZMM11 = SIMDRegisterType("zmm11")
+    ZMM12 = SIMDRegisterType("zmm12")
+    ZMM13 = SIMDRegisterType("zmm13")
+    ZMM14 = SIMDRegisterType("zmm14")
+    ZMM15 = SIMDRegisterType("zmm15")
+    ZMM16 = SIMDRegisterType("zmm16")
+    ZMM17 = SIMDRegisterType("zmm17")
+    ZMM18 = SIMDRegisterType("zmm18")
+    ZMM19 = SIMDRegisterType("zmm19")
+    ZMM20 = SIMDRegisterType("zmm20")
+    ZMM21 = SIMDRegisterType("zmm21")
+    ZMM22 = SIMDRegisterType("zmm22")
+    ZMM23 = SIMDRegisterType("zmm23")
+    ZMM24 = SIMDRegisterType("zmm24")
+    ZMM25 = SIMDRegisterType("zmm25")
+    ZMM26 = SIMDRegisterType("zmm26")
+    ZMM27 = SIMDRegisterType("zmm27")
+    ZMM28 = SIMDRegisterType("zmm28")
+    ZMM29 = SIMDRegisterType("zmm29")
+    ZMM30 = SIMDRegisterType("zmm30")
+    ZMM31 = SIMDRegisterType("zmm31")
+    
+    K0 = MaskRegisterType("k0")
+    K1 = MaskRegisterType("k1")
+    K2 = MaskRegisterType("k2")
+    K3 = MaskRegisterType("k3")
+    K4 = MaskRegisterType("k4")
+    K5 = MaskRegisterType("k5")
+    K6 = MaskRegisterType("k6")
+    K7 = MaskRegisterType("k7")
 
 
 @irdl_attr_definition
@@ -383,11 +503,18 @@ class X86Instruction(X86Op):
     def assembly_line(self) -> str | None:
         # default assembly code generator
         instruction_name = self.assembly_instruction_name()
-        arg_str = ", ".join(
-            _assembly_arg_str(arg)
-            for arg in self.assembly_line_args()
-            if arg is not None
-        )
+        if ASM_SYNTAX == "att":
+            arg_str = ", ".join(
+                _assembly_arg_str(arg)
+                for arg in self.assembly_line_args()[::-1]
+                if arg is not None
+            )
+        else:
+            arg_str = ", ".join(
+                _assembly_arg_str(arg)
+                for arg in self.assembly_line_args()
+                if arg is not None
+            )
         return _assembly_line(instruction_name, arg_str, self.comment)
 
 
@@ -592,6 +719,18 @@ class MovOp(RROperation[GeneralRegisterType, GeneralRegisterType]):
     """
 
     name = "x86.mov"
+    
+@irdl_op_definition
+class RRKmovbOp(RROperation[GeneralRegisterType, GeneralRegisterType]):
+    """
+    Copies the value of r1 into r2.
+
+    x[r1] = x[r2]
+
+    https://www.felixcloutier..com/x86/mov
+    """
+
+    name = "x86.kmovb"
 
 
 @irdl_op_definition
@@ -665,7 +804,7 @@ class RRROperation(Generic[R1InvT, R2InvT, R3InvT], TripleOperandInstruction):
 
 class RMOperation(Generic[R1InvT, R2InvT], DoubleOperandInstruction):
     """
-    A base class for x86 operations that have two registers and an offset.
+    A base class for x86 operations that have a register and a memory offset.
     """
 
     r1 = operand_def(R1InvT)
@@ -718,14 +857,22 @@ class RMOperation(Generic[R1InvT, R2InvT], DoubleOperandInstruction):
         instruction_name = self.assembly_instruction_name()
         destination = _assembly_arg_str(self.r1)
         source = _assembly_arg_str(self.r2)
-        if self.offset is not None:
-            offset = _assembly_arg_str(self.offset)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if ASM_SYNTAX == "att":
+                arg_str = f"{offset: #x}({source}), {destination}"
+            else:
+                arg_str = f"{destination}, [{source} + {offset}]"
             return _assembly_line(
-                instruction_name, f"{destination}, [{source} + {offset}]", self.comment
+                instruction_name, arg_str, self.comment
             )
         else:
+            if ASM_SYNTAX == "att":
+                arg_str = f"({source}), {destination}"
+            else:
+                arg_str = f"{destination}, [{source}]"
             return _assembly_line(
-                instruction_name, f"{destination}, [{source}]", self.comment
+                instruction_name, arg_str, self.comment
             )
 
 
@@ -735,6 +882,216 @@ class RMMovOp(RMOperation[GeneralRegisterType, GeneralRegisterType]):
     Copies the value from the memory location pointed to by r2 into r1.
 
     x[r1] = [x[r2]]
+
+    https://www.felixcloutier.com/x86/mov
+    """
+
+    name = "x86.mov"
+
+class MOperation(Generic[R1InvT], DoubleOperandInstruction):
+    """
+    A base class for x86 operations that have a register and a memory offset.
+    """
+
+    r1 = operand_def(R1InvT)
+    offset: AnyIntegerAttr | None = opt_attr_def(AnyIntegerAttr)
+
+    result = result_def(R1InvT)
+
+    def __init__(
+        self,
+        r1: Operation | SSAValue,
+        offset: int | AnyIntegerAttr | None = None,
+        *,
+        comment: str | StringAttr | None = None,
+        result: R1InvT,
+    ):
+        if isinstance(offset, int):
+            offset = IntegerAttr(offset, 12)  # I have no clue why that is 12
+        if isinstance(comment, str):
+            comment = StringAttr(comment)
+
+        super().__init__(
+            operands=[r1],
+            attributes={
+                "offset": offset,
+                "comment": comment,
+            },
+            result_types=[result],
+        )
+
+    def assembly_line_args(self) -> tuple[AssemblyInstructionArg | None, ...]:
+        return self.r1
+
+    @classmethod
+    def custom_parse_attributes(cls, parser: Parser) -> dict[str, Attribute]:
+        attributes = dict[str, Attribute]()
+        attributes["offset"] = _parse_immediate_value(
+            parser, IntegerType(12, Signedness.SIGNED)
+        )
+        return attributes
+
+    def custom_print_attributes(self, printer: Printer) -> Set[str]:
+        printer.print(", ")
+        if self.offset is not None:
+            _print_immediate_value(printer, self.offset)
+        return {"offset"}
+
+    def assembly_line(self) -> str | None:
+        instruction_name = self.assembly_instruction_name()
+        source = _assembly_arg_str(self.r1)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if ASM_SYNTAX == "att":
+                arg_str = f"{offset: #x}({source})"
+            else:
+                arg_str = f"[{source} + {offset}]"
+            return _assembly_line(
+                instruction_name, arg_str, self.comment
+            )
+        else:
+            if ASM_SYNTAX == "att":
+                arg_str = f"({source})"
+            else:
+                arg_str = f"[{source}]"
+            return _assembly_line(
+                instruction_name, arg_str, self.comment
+            )
+            
+@irdl_op_definition
+class MPrefetcht1Op(MOperation[GeneralRegisterType]):
+    """
+    Prefetches the memory location pointed to by r1 into the L1 cache.
+
+    https://www.felixcloutier.com/x86/prefetch
+    """
+
+    name = "x86.prefetcht1"
+    
+@irdl_op_definition
+class MJlOp(MOperation[GeneralRegisterType]):
+    """
+    Jump to the memory location pointed to by r1.
+
+    https://www.felixcloutier.com/x86/jmp
+    """
+
+    name = "x86.jl"
+    
+
+    
+@irdl_op_definition
+class RMVbroadcastsdOp(RMOperation[GeneralRegisterType, GeneralRegisterType]):
+    """
+    Copies the value from the memory location pointed to by r2 into r1.
+
+    x[r1] = [x[r2]]
+
+    https://www.felixcloutier.com/x86/mov
+    """
+
+    name = "x86.vbroadcastsd"
+
+class RIOperation(Generic[R1InvT], DoubleOperandInstruction):
+    """
+    A base class for x86 operations that have one register and an immediate value.
+    """
+
+    r1 = operand_def(R1InvT)
+    immediate: AnyIntegerAttr | LabelAttr = attr_def(AnyIntegerAttr)
+
+    result = result_def(R1InvT)
+
+    def __init__(
+        self,
+        r1: Operation | SSAValue,
+        immediate: int | AnyIntegerAttr,
+        *,
+        comment: str | StringAttr | None = None,
+        result: R1InvT,
+    ):
+        if isinstance(immediate, int):
+            immediate = IntegerAttr(immediate, 32)  # 32 bits?
+        if isinstance(comment, str):
+            comment = StringAttr(comment)
+
+        super().__init__(
+            operands=[r1],
+            attributes={
+                "immediate": immediate,
+                "comment": comment,
+            },
+            result_types=[result],
+        )
+
+    def assembly_line_args(self) -> tuple[AssemblyInstructionArg | None, ...]:
+        return self.r1, self.immediate
+    
+    @classmethod
+    def custom_parse_attributes(cls, parser: Parser) -> dict[str, Attribute]:
+        attributes = dict[str, Attribute]()
+        attributes["immediate"] = _parse_immediate_value(
+            parser, IntegerType(32, Signedness.SIGNED)
+        )
+        return attributes
+
+    def custom_print_attributes(self, printer: Printer) -> Set[str]:
+        printer.print(", ")
+        _print_immediate_value(printer, self.immediate)
+        return {"immediate"}
+    
+@irdl_op_definition
+class RIAddOp(RIOperation[GeneralRegisterType]):
+    """
+    Adds the register r1 and an immediate and stores the result in r1.
+
+    x[r1] = x[r1] + i
+
+    https://www.felixcloutier.com/x86/add
+    """
+
+    name = "x86.add"
+    
+@irdl_op_definition
+class RICmpOp(RIOperation[GeneralRegisterType]):
+    """
+    Compares the register r1 and an immediate.
+
+    https://www.felixcloutier.com/x86/cmp
+    """
+
+    name = "x86.cmp"
+    
+@irdl_op_definition
+class RISubOp(RIOperation[GeneralRegisterType]):
+    """
+    Subtracts an immediate from r1 and stores the result in r1.
+
+    x[r1] = x[r1] - i
+
+    https://www.felixcloutier.com/x86/sub
+    """
+
+    name = "x86.sub"
+    
+@irdl_op_definition
+class RIMovabsOp(RIOperation[GeneralRegisterType]):
+    """
+    Moves the immediate value into r1.
+
+    x[r1] = i
+
+    https://docs.oracle.com/cd/E18752_01/html/817-5477/ennbz.html#indexterm-150
+    """
+
+    name = "x86.movabs"
+    
+@irdl_op_definition
+class RIMovOp(RIOperation[GeneralRegisterType]):
+    """
+    Copies the immediate value into r1.
+
+    x[r1] = i
 
     https://www.felixcloutier.com/x86/mov
     """
@@ -801,9 +1158,14 @@ class MIOperation(Generic[R1InvT], DoubleOperandInstruction):
         immediate = _assembly_arg_str(self.immediate)
         if self.offset is not None:
             offset = _assembly_arg_str(self.offset)
+            if ASM_SYNTAX == "att":
+                arg_str = f"{offset: #x}({destination}), {immediate}"
+            else:
+                arg_str = f"[{destination} + {offset}], {immediate}"
+            
             return _assembly_line(
                 instruction_name,
-                f"[{destination} + {offset}],  {immediate}",
+                arg_str,
                 self.comment,
             )
         else:
@@ -880,14 +1242,22 @@ class MROperation(Generic[R1InvT, R2InvT], DoubleOperandInstruction):
         instruction_name = self.assembly_instruction_name()
         destination = _assembly_arg_str(self.r1)
         source = _assembly_arg_str(self.r2)
-        if self.offset is not None:
-            offset = _assembly_arg_str(self.offset)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if ASM_SYNTAX == "att":
+                arg_str = f"{source}, {offset: #x}({destination})"
+            else:
+                arg_str = f"[{destination}  + {offset}], {source}"
             return _assembly_line(
-                instruction_name, f"[{destination} + {offset}], {source}", self.comment
+                instruction_name, arg_str, self.comment
             )
         else:
+            if ASM_SYNTAX == "att":
+                arg_str = f"{source}, ({destination})"
+            else:
+                arg_str = f"[{destination}], {source}"
             return _assembly_line(
-                instruction_name, f"[{destination}], {source}", self.comment
+                instruction_name, arg_str, self.comment
             )
 
 
@@ -902,6 +1272,18 @@ class MRMovOp(MROperation[GeneralRegisterType, GeneralRegisterType]):
     """
 
     name = "x86.mov"
+    
+@irdl_op_definition
+class MRVmovupdOp(MROperation[GeneralRegisterType, SIMDRegisterType]):
+    """
+    Copies the value from r2 into the memory location pointed to by r1.
+
+    x[r1] = [x[r2]]
+
+    https://www.felixcloutier.com/x86/mov
+    """
+
+    name = "x86.vmovupd"
 
 
 @irdl_op_definition
@@ -969,7 +1351,7 @@ class DirectiveOp(IRDLOperation, X86Op):
 
 
 @irdl_op_definition
-class Vfmadd231pdOp(RRROperation[AVXRegisterType, AVXRegisterType, AVXRegisterType]):
+class Vfmadd231pdOp(RRROperation[SIMDRegisterType, SIMDRegisterType, SIMDRegisterType]):
     """
     Multiply packed double-precision floating-point elements in r2 and r3, add the intermediate result to r1, and store the final result in r1.
 
@@ -980,7 +1362,7 @@ class Vfmadd231pdOp(RRROperation[AVXRegisterType, AVXRegisterType, AVXRegisterTy
 
 
 @irdl_op_definition
-class VmovapdOp(RMOperation[AVXRegisterType, GeneralRegisterType]):
+class RMVmovapdOp(RMOperation[SIMDRegisterType, GeneralRegisterType]):
     """
     Move aligned packed double-precision floating-point elements.
 
@@ -988,10 +1370,20 @@ class VmovapdOp(RMOperation[AVXRegisterType, GeneralRegisterType]):
     """
 
     name = "x86.vmovapd"
+    
+@irdl_op_definition
+class RMVmovupdOp(RMOperation[SIMDRegisterType, GeneralRegisterType]):
+    """
+    Move aligned packed double-precision floating-point elements.
+
+    https://www.felixcloutier.com/x86/movapd
+    """
+
+    name = "x86.vmovupd"
 
 
 @irdl_op_definition
-class VbroadcastsdOp(RMOperation[AVXRegisterType, GeneralRegisterType]):
+class VbroadcastsdOp(RMOperation[SIMDRegisterType, GeneralRegisterType]):
     """
     Broadcast scalar double-precision floating-point element.
 
@@ -1003,6 +1395,328 @@ class VbroadcastsdOp(RMOperation[AVXRegisterType, GeneralRegisterType]):
 
 # region Assembly printing
 
+class RKMOperation(Generic[R1InvT, R2InvT, R3InvT], DoubleOperandInstruction):
+    """
+    A base class for x86 operations that have a register with a mask and a memory reference.
+    """
+
+    r1 = operand_def(R1InvT)
+    r2 = operand_def(R2InvT)
+    r3 = operand_def(R3InvT)
+    offset: AnyIntegerAttr | None = opt_attr_def(AnyIntegerAttr)
+    modifier: StringAttr | None = opt_attr_def(StringAttr)
+
+    result = result_def(R1InvT)
+
+    def __init__(
+        self,
+        r1: Operation | SSAValue,
+        r2: Operation | SSAValue,
+        r3: Operation | SSAValue,
+        offset: int | AnyIntegerAttr | None,
+        modifier: str | StringAttr | None,
+        *,
+        comment: str | StringAttr | None = None,
+        result: R1InvT,
+    ):
+        if isinstance(offset, int):
+            offset = IntegerAttr(offset, 12)
+        if isinstance(modifier, str):
+            modifier = StringAttr(modifier)
+        if isinstance(comment, str):
+            comment = StringAttr(comment)
+
+        super().__init__(
+            operands=[r1, r2, r3],
+            attributes={
+                "offset": offset,
+                "modifier": modifier,
+                "comment": comment,
+            },
+            result_types=[result],
+        )
+
+    # def assembly_line_args(self) -> tuple[AssemblyInstructionArg | None, ...]:
+    #     return self.r1, self.r2
+
+    @classmethod
+    def custom_parse_attributes(cls, parser: Parser) -> dict[str, Attribute]:
+        attributes = dict[str, Attribute]()
+        attributes["offset"] = _parse_immediate_value(
+            parser, IntegerType(12, Signedness.SIGNED)
+        )
+        return attributes
+
+    def custom_print_attributes(self, printer: Printer) -> Set[str]:
+        printer.print(", ")
+        if self.offset is not None:
+            _print_immediate_value(printer, self.offset)
+        return {"offset"}
+
+    def assembly_line(self) -> str | None:
+        instruction_name = self.assembly_instruction_name()
+        destination = _assembly_arg_str(self.r1)
+        source = _assembly_arg_str(self.r2)
+        mask = _assembly_arg_str(self.r3)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if self.modifier is not None:
+                modifier = self.modifier.data   
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{offset: #x}({source}), {destination}{{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else: 
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{offset: #x}({source}),  {destination}{{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+        else:
+            if self.modifier is not None:
+                modifier = self.modifier.data
+                if ASM_SYNTAX == "att":
+                    arg_str = f"({source}),  {destination}{{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else:
+                if ASM_SYNTAX == "att":
+                    arg_str = f"({source}),  {destination}{{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+                
+class RKMOperation(Generic[R1InvT, R2InvT, R3InvT], DoubleOperandInstruction):
+    """
+    A base class for x86 operations that have a register with a mask and a memory reference.
+    """
+
+    r1 = operand_def(R1InvT)
+    r2 = operand_def(R2InvT)
+    r3 = operand_def(R3InvT)
+    offset: AnyIntegerAttr | None = opt_attr_def(AnyIntegerAttr)
+    modifier: StringAttr | None = opt_attr_def(StringAttr)
+
+    result = result_def(R1InvT)
+
+    def __init__(
+        self,
+        r1: Operation | SSAValue,
+        r2: Operation | SSAValue,
+        r3: Operation | SSAValue,
+        offset: int | AnyIntegerAttr | None,
+        modifier: str | StringAttr | None,
+        *,
+        comment: str | StringAttr | None = None,
+        result: R1InvT,
+    ):
+        if isinstance(offset, int):
+            offset = IntegerAttr(offset, 12)
+        if isinstance(modifier, str):
+            modifier = StringAttr(modifier)
+        if isinstance(comment, str):
+            comment = StringAttr(comment)
+
+        super().__init__(
+            operands=[r1, r2, r3],
+            attributes={
+                "offset": offset,
+                "modifier": modifier,
+                "comment": comment,
+            },
+            result_types=[result],
+        )
+
+    # def assembly_line_args(self) -> tuple[AssemblyInstructionArg | None, ...]:
+    #     return self.r1, self.r2
+
+    @classmethod
+    def custom_parse_attributes(cls, parser: Parser) -> dict[str, Attribute]:
+        attributes = dict[str, Attribute]()
+        attributes["offset"] = _parse_immediate_value(
+            parser, IntegerType(12, Signedness.SIGNED)
+        )
+        return attributes
+
+    def custom_print_attributes(self, printer: Printer) -> Set[str]:
+        printer.print(", ")
+        if self.offset is not None:
+            _print_immediate_value(printer, self.offset)
+        return {"offset"}
+
+    def assembly_line(self) -> str | None:
+        instruction_name = self.assembly_instruction_name()
+        destination = _assembly_arg_str(self.r1)
+        source = _assembly_arg_str(self.r2)
+        mask = _assembly_arg_str(self.r3)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if self.modifier is not None:
+                modifier = self.modifier.data   
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{offset: #x}({source}), {destination}{{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else: 
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{offset: #x}({source}),  {destination}{{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+        else:
+            if self.modifier is not None:
+                modifier = self.modifier.data
+                if ASM_SYNTAX == "att":
+                    arg_str = f"({source}),  {destination}{{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else:
+                if ASM_SYNTAX == "att":
+                    arg_str = f"({source}),  {destination}{{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+
+@irdl_op_definition
+class RKMVmovupdOp(RKMOperation[SIMDRegisterType, GeneralRegisterType, MaskRegisterType]):
+    """
+    Move aligned packed double-precision floating-point elements.
+
+    https://www.felixcloutier.com/x86/movapd
+    """
+
+    name = "x86.vmovupd"
+    
+class MKROperation(Generic[R1InvT, R2InvT, R3InvT], DoubleOperandInstruction):
+    """
+    A base class for x86 operations that have a register with a mask and a memory reference.
+    """
+
+    r1 = operand_def(R1InvT)
+    r2 = operand_def(R2InvT)
+    r3 = operand_def(R3InvT)
+    offset: AnyIntegerAttr | None = opt_attr_def(AnyIntegerAttr)
+    modifier: StringAttr | None = opt_attr_def(StringAttr)
+
+    result = result_def(R1InvT)
+
+    def __init__(
+        self,
+        r1: Operation | SSAValue,
+        r2: Operation | SSAValue,
+        r3: Operation | SSAValue,
+        offset: int | AnyIntegerAttr | None,
+        modifier: str | StringAttr | None,
+        *,
+        comment: str | StringAttr | None = None,
+        result: R1InvT,
+    ):
+        if isinstance(offset, int):
+            offset = IntegerAttr(offset, 12)
+        if isinstance(modifier, str):
+            modifier = StringAttr(modifier)
+        if isinstance(comment, str):
+            comment = StringAttr(comment)
+
+        super().__init__(
+            operands=[r1, r2, r3],
+            attributes={
+                "offset": offset,
+                "modifier": modifier,
+                "comment": comment,
+            },
+            result_types=[result],
+        )
+
+    # def assembly_line_args(self) -> tuple[AssemblyInstructionArg | None, ...]:
+    #     return self.r1, self.r2
+
+    @classmethod
+    def custom_parse_attributes(cls, parser: Parser) -> dict[str, Attribute]:
+        attributes = dict[str, Attribute]()
+        attributes["offset"] = _parse_immediate_value(
+            parser, IntegerType(12, Signedness.SIGNED)
+        )
+        return attributes
+
+    def custom_print_attributes(self, printer: Printer) -> Set[str]:
+        printer.print(", ")
+        if self.offset is not None:
+            _print_immediate_value(printer, self.offset)
+        return {"offset"}
+
+    def assembly_line(self) -> str | None:
+        instruction_name = self.assembly_instruction_name()
+        destination = _assembly_arg_str(self.r1)
+        source = _assembly_arg_str(self.r2)
+        mask = _assembly_arg_str(self.r3)
+        if self.offset is not None and self.offset.value.data != 0:
+            offset = self.offset.value.data
+            if self.modifier is not None:
+                modifier = self.modifier.data   
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{source}, {offset: #x}({destination}){{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else: 
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{source}, {offset: #x}({destination}){{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source} + {offset}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+        else:
+            if self.modifier is not None:
+                modifier = self.modifier.data
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{source}, ({destination}){{{mask}}}{{{modifier}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+            else:
+                if ASM_SYNTAX == "att":
+                    arg_str = f"{source}, ({destination}){{{mask}}}"
+                else:
+                    arg_str = f"{destination}, [{source}]"
+                return _assembly_line(
+                    instruction_name, arg_str, self.comment
+                )
+
+@irdl_op_definition
+class MKRVmovupdOp(MKROperation[SIMDRegisterType, GeneralRegisterType, MaskRegisterType]):
+    """
+    Move aligned packed double-precision floating-point elements.
+
+    https://www.felixcloutier.com/x86/movapd
+    """
+
+    name = "x86.vmovupd"
 
 def _append_comment(line: str, comment: StringAttr | None) -> str:
     if comment is None:
@@ -1015,26 +1729,31 @@ def _append_comment(line: str, comment: StringAttr | None) -> str:
 
 def _assembly_arg_str(arg: AssemblyInstructionArg) -> str:
     if isa(arg, AnyIntegerAttr):
-        return f"{arg.value.data}"
+        if ASM_SYNTAX == "att":
+            return f"${arg.value.data:#x}"
+        else:
+            return f"{arg.value.data}"
     elif isinstance(arg, int):
-        return f"{arg}"
+        if ASM_SYNTAX == "att":
+            return f"${arg:#x}"
+        else:
+            return f"{arg}"
     elif isinstance(arg, LabelAttr):
         return arg.data
     elif isinstance(arg, str):
         return arg
-    elif isinstance(arg, GeneralRegisterType):
-        return arg.register_name
-    elif isinstance(arg, AVXRegisterType):
-        return arg.register_name
-    else:
-        if isinstance(arg.type, GeneralRegisterType):
-            reg = arg.type.register_name
-            return reg
-        elif isinstance(arg.type, AVXRegisterType):
-            reg = arg.type.register_name
-            return reg
+    elif isinstance(arg, GeneralRegisterType | SIMDRegisterType | MaskRegisterType):
+        if ASM_SYNTAX == "att":
+            return f"%{arg.register_name}"
         else:
-            assert False, f"{arg.type}"
+            return arg.register_name
+    elif isinstance(arg.type, GeneralRegisterType | SIMDRegisterType | MaskRegisterType):
+        if ASM_SYNTAX == "att":
+            return f"%{arg.type.register_name}"
+        else:
+            return arg.type.register_name
+    else:
+        assert False, f"{arg.type}"
 
 
 def _assembly_line(
@@ -1120,7 +1839,7 @@ class GetRegisterOp(GetAnyRegisterOperation[GeneralRegisterType]):
 
 
 @irdl_op_definition
-class GetAVXRegisterOp(GetAnyRegisterOperation[AVXRegisterType]):
+class GetAVXRegisterOp(GetAnyRegisterOperation[SIMDRegisterType]):
     name = "x86.get_avx_register"
 
 
@@ -1139,7 +1858,7 @@ X86 = Dialect(
         PushOp,
         PopOp,
         Vfmadd231pdOp,
-        VmovapdOp,
+        RMVmovapdOp,
         VbroadcastsdOp,
         DirectiveOp,
         GetRegisterOp,
@@ -1147,7 +1866,8 @@ X86 = Dialect(
     ],
     [
         GeneralRegisterType,
-        AVXRegisterType,
+        MaskRegisterType,
+        SIMDRegisterType,
         LabelAttr,
     ],
 )
